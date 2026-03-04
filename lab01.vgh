@@ -1,0 +1,89 @@
+-- io_top.vhd (NO component declaration)
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity io_top is
+    port (
+        CLOCK_50 : in  std_logic;
+        SW       : in  std_logic_vector(9 downto 0);
+        KEY      : in  std_logic_vector(3 downto 0);
+
+        LEDR     : out std_logic_vector(9 downto 0);
+        HEX0     : out std_logic_vector(6 downto 0);
+        HEX1     : out std_logic_vector(6 downto 0);
+        HEX2     : out std_logic_vector(6 downto 0);
+        HEX3     : out std_logic_vector(6 downto 0);
+        HEX4     : out std_logic_vector(6 downto 0);
+        HEX5     : out std_logic_vector(6 downto 0)
+    );
+end entity;
+
+architecture rtl of io_top is
+
+    -- Organized inputs
+    signal product_sel : std_logic_vector(3 downto 0);
+    signal money_sw    : std_logic_vector(5 downto 0);
+
+    -- Button edge/pulse
+    signal key_prev   : std_logic_vector(3 downto 0) := (others => '1');
+    signal key0_pulse : std_logic := '0';
+    signal key1_pulse : std_logic := '0';
+
+    -- Core outputs (internal wires)
+    signal core_led0_release : std_logic := '0';
+    signal core_led1_change  : std_logic := '0';
+
+    signal hex0_s, hex1_s, hex2_s, hex3_s, hex4_s, hex5_s : std_logic_vector(6 downto 0);
+
+begin
+    -- Split raw switches
+    product_sel <= SW(3 downto 0);
+    money_sw    <= SW(9 downto 4);
+
+    -- Generate 1-cycle pulses when KEY(0)/KEY(1) is pressed (1 -> 0)
+    process (CLOCK_50)
+        variable k_now : std_logic_vector(3 downto 0);
+    begin
+        if rising_edge(CLOCK_50) then
+            k_now := KEY;
+
+            key0_pulse <= '1' when (key_prev(0) = '1' and k_now(0) = '0') else '0';
+            key1_pulse <= '1' when (key_prev(1) = '1' and k_now(1) = '0') else '0';
+
+            key_prev <= k_now;
+        end if;
+    end process;
+
+    -- Instantiate the core DIRECTLY (no component)
+    U_CORE : entity work.vending_core
+        port map (
+            clk         => CLOCK_50,
+            product_sel => product_sel,
+            money_sw    => money_sw,
+            advance_p   => key0_pulse,
+            cancel_p    => key1_pulse,
+
+            led_release => core_led0_release,
+            led_change  => core_led1_change,
+
+            HEX0_o      => hex0_s,
+            HEX1_o      => hex1_s,
+            HEX2_o      => hex2_s,
+            HEX3_o      => hex3_s,
+            HEX4_o      => hex4_s,
+            HEX5_o      => hex5_s
+        );
+
+    -- Drive board outputs
+    LEDR <= (others => '0');
+    LEDR(0) <= core_led0_release;
+    LEDR(1) <= core_led1_change;
+
+    HEX0 <= hex0_s;
+    HEX1 <= hex1_s;
+    HEX2 <= hex2_s;
+    HEX3 <= hex3_s;
+    HEX4 <= hex4_s;
+    HEX5 <= hex5_s;
+
+end architecture;
